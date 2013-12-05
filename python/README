@@ -1,0 +1,56 @@
+Exported:
+
+dhcp.discover_interfaces() : [ interface1, ... interfaceN ]
+
+    Returns a list of interfaces - each interface in the list is a
+    string naming the interface, suitable for passing to
+    dhcp.probe_interface();
+
+dhcp.Interface(name) : Interface
+
+    Probes the named (string) interface.   Returns an Interface object if
+    the interface is found; otherwise None.
+
+dhcp.v4controller() : v4Controller
+
+dhcp.v4client(duid, interface, controller): V4Client
+
+    Initializes a v4controller object that will interface to the python object
+    passed in /controller/.   Creates a DHCPv4 client object controlled by
+    the specified controller.   The controller is a python object with methods
+    congruent with a C++ v4controller object.
+
+    The object starts in the halt state; if it is to do any work, it needs
+    to be started, e.g. by calling the state_startup() method or the
+    state_inform() method.
+
+    For actual client usage, duid should be the same for all clients; to
+    simulate multiple clients, duid should be different for each client.
+
+dhcp.v6client(duid, interface, controller): V6Client
+
+    Initializes a v6controller object that will interface to the python object
+    passed in /controller/.   Creates a DHCPv6 client object controlled by
+    the specified controller.   The controller is a python object with methods
+    congruent with a C++ v6controller object.
+
+    The object starts in the halt state; if it is to do any work, it needs
+    to be started, e.g. by calling the state_startup() method or the
+    state_inform() method.
+
+    For actual client usage, duid should be the same for all clients; to
+    simulate multiple clients, duid should be different for each client.
+
+dhcp.v4netsetup(): None
+dhcp.v6netsetup(): None
+
+    These set up network I/O for DHCPv4 and DHCPv6, respectively.   Each must
+    be called if its respective protocol will be used; neither need be called
+    if its protocol will not be used.
+
+dhcp.dispatch(): None
+
+    Starts up a DHCP dispatcher, which never returns.   If any further
+    work besides the DHCP protocol needs to be done, the dispatcher should
+    be started in its own thread.   Bear in mind that the dispatcher can
+    re-enter the interpreter...

@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+from distutils.core import setup, Extension
+import os
+
+include_dirs = [os.getcwd(), os.getcwd() + '/includes']
+setup(name="dhcp", version="0.1",
+      ext_modules=[Extension("dhcp",
+                             ["client/controller.cpp",
+                              "client/v4client.cpp",
+                              "client/v6client.cpp",
+                              "common/alloc.cpp",
+                              "common/auth.cpp",
+                              "common/convert.cpp",
+                              "common/discover.cpp",
+                              "common/dispatch.cpp",
+                              "common/errwarn.cpp",
+                              "common/hash.cpp",
+                              "common/ifaddrs.cpp",
+                              "common/inet.cpp",
+                              "common/bpf.cpp",
+                              "common/lpf.cpp",
+                              "common/options.cpp",
+                              "common/packet.cpp",
+                              "common/print.cpp",
+                              "common/result.cpp",
+                              "common/socket.cpp",
+                              "common/tables.cpp",
+                              "common/toisc.cpp",
+                              "common/v6packet.cpp",
+                              "dhc++/eventreceiver.cpp",
+                              "dhc++/timeout.cpp",
+                              "dhc++/v4listener.cpp",
+                              "dhc++/v6listener.cpp",
+                              "python/pyif.cpp",
+                              "python/pycon.cpp",
+                              "python/pyv6client.cpp",
+                              "python/pyv4client.cpp",
+                              "python/pyoptions.cpp",
+                              "python/pymod.cpp"],
+                             include_dirs=include_dirs,
+			     extra_compile_args=["-g", "-O0"])])

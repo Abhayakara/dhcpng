@@ -1,0 +1,99 @@
+# Makefile.dist
+#
+# Copyright (c) 1996-2002 Internet Software Consortium.
+# Use is subject to license terms which appear in the file named
+# ISC-LICENSE that should have accompanied this file when you
+# received it.   If a file named ISC-LICENSE did not accompany this
+# file, or you are not sure the one you have is correct, you may
+# obtain an applicable copy of the license at:
+#
+#             http://www.isc.org/isc-license-1.0.html. 
+#
+# This file is part of the ISC DHCP distribution.   The documentation
+# associated with this file is listed in the file DOCUMENTATION,
+# included in the top-level directory of this release.
+#
+# Support and other services are available for ISC products - see
+# http://www.isc.org for more information.
+#
+
+CATMANPAGES = dhcp-server.cat8
+SEDMANPAGES = dhcp-server.man8
+SRCS   = server.cpp v6server.cpp
+OBJS   = server.o v6server.o
+PROGS   = dhcp-server
+MAN    = dhcp-server.8
+
+INCLUDES = -I$(TOP) -I$(TOP)/includes -I$(TOP)/server
+DHCPLIB = ../common/libdhcp.a ../dhc++/libdhc++.a ../common/libdhcp.a
+CPPFLAGS = $(DEBUG) $(PREDEFINES) $(INCLUDES) $(COPTS) \
+		-DCLIENT_PATH=${CLIENT_PATH}
+
+all:	$(PROGS) $(CATMANPAGES)
+
+install: all
+	for dir in $(CLIENTBINDIR) $(ETC) $(FFMANDIR) $(ADMMANDIR) $(VARDB); \
+	do \
+	  foo=""; \
+	  for bar in `echo $(DESTDIR)$${dir} |tr / ' '`; do \
+	    foo=$${foo}/$$bar; \
+	    if [ ! -d $$foo ]; then \
+	      mkdir $$foo; \
+	      chmod 755 $$foo; \
+	    fi; \
+	  done; \
+	done
+	$(INSTALL) dhclient $(DESTDIR)$(CLIENTBINDIR)
+	$(CHMOD) 755 $(DESTDIR)$(CLIENTBINDIR)/dhclient
+	if [ x$(SCRIPT) = xnone ]; then \
+	  echo "No client script available."; \
+	else \
+	  $(INSTALL) $(TOP)/client/scripts/$(SCRIPT)\
+				$(DESTDIR)$(CLIENTBINDIR)/dhclient-script; \
+	  $(CHMOD) 700 $(DESTDIR)$(CLIENTBINDIR)/dhclient-script; \
+	fi
+	$(MANINSTALL) $(MANFROM) dhclient.$(MANCAT)8 $(MANTO) \
+			$(DESTDIR)$(ADMMANDIR)/dhclient$(ADMMANEXT)
+	$(MANINSTALL) $(MANFROM) dhclient-script.$(MANCAT)8 $(MANTO) \
+			$(DESTDIR)$(ADMMANDIR)/dhclient-script$(ADMMANEXT)
+	$(MANINSTALL) $(MANFROM) dhclient.conf.$(MANCAT)5 $(MANTO) \
+			$(DESTDIR)$(FFMANDIR)/dhclient.conf$(FFMANEXT)
+	$(MANINSTALL) $(MANFROM) dhclient.leases.$(MANCAT)5 $(MANTO) \
+			$(DESTDIR)$(FFMANDIR)/dhclient.leases$(FFMANEXT)
+
+depend:
+	$(MKDEP) $(INCLUDES) $(PREDEFINES) $(SRCS) $(DUMSRCS)
+
+clean:
+	-rm -f $(OBJS) $(DUMOBJS)
+
+realclean: clean
+	-rm -f $(PROG) $(CATMANPAGES) $(SEDMANPAGES) *~ #*
+
+distclean: realclean
+	-rm -f Makefile
+
+links:
+	@for foo in $(SRCS) $(MAN); do \
+	  if [ ! -b $$foo ]; then \
+	    rm -f $$foo; \
+	  fi; \
+	  ln -s $(TOP)/server/$$foo $$foo; \
+	done
+
+# These should only be done on 4.4 BSD-based systems, since the mandoc
+# macros aren't available on older unices.   Catted man pages are
+# provided in the distribution so that this doesn't become a problem.
+
+dhcp-server.cat8:	dhcp-server.man8
+	nroff -man dhcp-server.man8 >dhcp-server.cat8
+
+dhcp-server.man8: dhcp-server.8
+	sed -e "s#ETCDIR#$(ETC)#g" -e "s#DBDIR#$(VARDB)#g" \
+		-e "s#CLIENTBINDIR#$(CLIENTBINDIR)#g" \
+		-e "s#RUNDIR#$(VARRUN)#g" < dhcp-server.8 >dhcp-server.man8
+
+dhcp-server:	$(OBJS) $(DHCPLIB)
+	$(CXX) $(LFLAGS) -o dhcp-server $(OBJS) $(DHCPLIB) $(LIBS)
+
+# Dependencies (semi-automatically-generated)

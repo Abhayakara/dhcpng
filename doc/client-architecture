@@ -1,0 +1,96 @@
+Some ranting about DHCP client architecture.
+
+What we mean by client could be a number of things.   I can think of a
+few components:
+
+[PERC]   the thing that keeps track of the persistent configuration
+[EPHC]   the thing that keeps track of the ephemeral configuration
+[PROT]   the protocol engine itself
+[UPDATE] the thing that applies the current configuration state to the
+	 system
+[FETCH]	 the thing that extracts the current system state and updates
+	 the ephemeral configuration from it.
+[PCTRL]	 the thing that manages the protocol engine
+[QUERY]	 the thing you use to query the client's state
+
+[UPDATE] isn't really a DHCP client function.   It's a system function
+that the DHCP client uses.
+
+Let's see how this whole thing operates.   Imagine the initial system
+startup sequence:
+
+  The system comes up.   There may be some network state, for example
+    if it did a network boot.
+  [PROT] starts; does nothing.
+  [UPDATE] starts; does nothing.
+  [PERC] starts; does nothing.
+  [EPHC] starts in state where chances to configuration are not reflecte
+  [EPHC] updates its internal configuration from [PERC].
+  [EPHC] updates its internal configuration from [FETCH]
+	(this avoids trashing autoconfiguration the kernel may have done)
+  [EPHC] enters the state where changes to configuration are reflected
+  [PCTRL] is invoked by the system startup scripts to configure eth0
+  [PCTRL] tells [PROT] to start on eth0
+  [PROT] consults [EPHC] to get current status of eth0
+  [PROT] begins the protocol as appropriate according to that status
+  [PROT] pushes results of protocol to [EPHC]
+  [EPHC] reflects changes to [UPDATE]
+  [EPHC] reflects changes to [PERC]
+  [EPHC] announces that network configuration for eth0 has changed.
+
+  Notice that aside from the system itself, EPHC is the central
+  repository for the current configuration of an adapter.
+
+  Now the user wants to make a configuration change.   The user uses
+  an external program to make this change.   We'll call that program
+  [MANAGE] and the user [USER]:
+
+  [MANAGE] gets list of adapters (how?)
+  [MANAGE] gets configuration of each adapter from [EPHC]
+  [MANAGE] presents a list of adapters with their abbreviated
+	   configuration to [USER]
+  [USER] selects eth0
+  [MANAGE] presents detailed eth0 configuration
+  [USER] directs [MANAGE] to release the lease for eth0.
+  [MANAGE] tells [PCTRL] to release the lease for eth0.
+  [PCTRL] tells [PROT] to release the lease for eth0.
+  [PROT] tells [EPHC] that it is releasing the lease for eth0
+  [EPHC] tells [PERC] that eth0 no longer has a lease.
+  [PERC] acknowledges to [EPHC] that it has recorded the change.
+  [EPHC] acknowledges to [PROT] that it has recorded the change.
+  [PROT] sends a DHCPRELEASE (assuming V4).
+  [PROT] tells [EPHC] that we have no IP address for eth0
+  [EPHC] tells [UPDATE] to release the IP address on eth0.
+  [EPHC] announces that the configuration for eth0 has changed.
+  [MANAGE] fetches configuration for eth0 from [EPHC]
+  [MANAGE] presents configuration.
+  [USER] tells [MANAGE] to get a lease for eth0.
+  [MANAGE] tells [PCTRL] to get a lease for eth0.
+  [PCTRL] tells [PROT] to get a lease for eth0.
+  [PROT] begins protocol
+  [PROT] pushes results of protocol to [EPHC]
+  [EPHC] reflects change to [UPDATE]
+  [EPHC] reflects change to [PERC]
+  [EPHC] announces that the configuration for eth0 has changed.
+  [MANAGE] fetches configuration for eth0 from [EPHC]
+  [MANAGE] presents configuration for eth0.
+
+  Let's say the user wants a manual address, so they go into [MANAGE]
+
+  [MANAGE] gets list of adapters (how?)
+  [MANAGE] gets configuration of each adapter from [EPHC]
+  [MANAGE] presents a list of adapters with their abbreviated
+	   configuration to [USER]
+  [USER] selects eth0
+  [MANAGE] presents detailed eth0 configuration
+  [USER] selects manual configuration
+  [MANAGE] presents UI for setting up IP address, etc.
+  [USER] sets it up
+  [USER] says "go."
+  [MANAGE] sends static configuration to [EPHC]
+  [EPHC] sends static config to [PERC]
+  [EPHC] tells DHCP client to stop
+  [EPHC] reflects new configuration to [UPDATE]
+  [EPHC] announces that configuration for eth0 has changed.
+  [MANAGE] fetches configuration for eth0 from [EPHC]
+  [MANAGE] presents configuration for eth0.

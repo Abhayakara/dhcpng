@@ -1,0 +1,38 @@
+# Makefile.dist
+
+SRC    = timeout.cpp v6listener.cpp v4listener.cpp eventreceiver.cpp
+OBJ    = timeout.o v6listener.o v4listener.o eventreceiver.o
+       	 
+
+INCLUDES = -I$(TOP) -I$(TOP)/includes
+CPPFLAGS = $(DEBUG) $(PREDEFINES) $(INCLUDES) $(COPTS)
+
+all:	libdhc++.a
+
+libdhc++.a:	$(OBJ)
+	rm -f libdhc++.a
+	ar cruv libdhc++.a $(OBJ)
+	$(RANLIB) libdhc++.a
+
+install: all
+
+depend:
+	$(MKDEP) $(INCLUDES) $(PREDEFINES) $(SRC)
+
+clean:
+	-rm -f $(OBJ)
+
+realclean: clean
+
+distclean: realclean
+	-rm -f Makefile
+
+links:
+	@for foo in $(SRC); do \
+	  if [ ! -b $$foo ]; then \
+	    rm -f $$foo; \
+	  fi; \
+	  ln -s $(TOP)/dhc++/$$foo $$foo; \
+	done
+
+# Dependencies (semi-automatically-generated)

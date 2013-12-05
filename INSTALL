@@ -1,0 +1,6 @@
+Placeholder.   This isn't ready for prime time yet.   Mostly, just type
+./configure and then make, and then play with it.   On Linux, you can
+run the client with the system configured, because on Linux more than one
+client is allowed to listen for DHCP messages.   The client doesn't yet
+work on an unconfigured interface; this will require some small kernel
+hacks, I think.
