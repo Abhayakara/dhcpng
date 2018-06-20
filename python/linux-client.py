@@ -57,20 +57,20 @@ class Controller:
 	else:
 		print prefix + "/" + name + " = " + repr(value)
 
-dhcp.v6netsetup(547, 546)
+dhcp.v6netsetup(546, 547)
 # Get an interface object for wlan0.   This is mac-specific, and not the
 # right way to do it.
-wlan0 = dhcp.Interface("wlan0")
+wlan0 = dhcp.Interface("br0")
 hwaddr = wlan0.lladdr
 hwtype = wlan0.lltype
 try:
-  duif = file("/var/db/dhcp-client-duid", "r")
+  duif = file("/var/lib/dhcp/dhcp-client-duid", "r")
   duid = duif.read()
 except Exception, v:
   print v
   duid = struct.pack("!HLHs", 1, int(time.time()), hwtype, hwaddr)
-V6Client = dhcp.v6client("wlan0", Controller(), duid)
-V6Client.state_inform()
+V6Client = dhcp.v6client("br0", Controller(), duid)
+V6Client.state_soliciting()
 try:
     dhcp.dispatch()
 except KeyboardInterrupt:

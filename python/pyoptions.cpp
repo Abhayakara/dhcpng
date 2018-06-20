@@ -425,7 +425,6 @@ pythonify_optformat(const char *name,
   return ret;
 }
 
-#ifdef NOTYET
 /* Given a python dictionary containing options, produce an option_state_t
  * containing those options.   Example:
  *
@@ -502,6 +501,246 @@ option_state_from_python(PyObject *dict, struct option_space *default_space)
     return os;
 }
 
+/* Convert a single python data element from the given format. */
+static int
+optformat_from_python(static struct option_cache *oc,
+		      char format, char *fptr,
+		      PyObject *singleton,  int available)
+{
+  switch (format)
+    {
+	case 'E':
+	  /* Encapsulations have to come at the end of the buffer.   We do
+	   * not pythonify the options in an encapsulation.
+	   */
+	  fp = end;
+	  elt = NULL;
+	  consumed = dp->len;
+	  break;
+
+	case 'F':
+	  fp++;
+	  elt = Py_True;
+	  Py_INCREF(elt);
+	  consumed = 0;
+	  break;
+
+	case 'e':
+	  fp++;
+	  elt = NULL;
+	  consumed = 0;
+	  break;
+
+	case 'X':
+	  for (i = 0; i < dp->len; i++)
+	    {
+	      if (!isascii(dp->data[i]) || !isprint(dp->data[i]))
+		break;
+	    }
+
+	  /* If it contains some non-printable characters, return as
+	   * a byte array, not a string.
+	   */
+	  if (i != dp->len)
+	    {
+	      fp++;
+	      elt = PyByteArray_FromStringAndSize((const char *)dp->data,
+						  (int)dp->len);
+	      consumed = dp->len;
+	      break;
+	    }
+	  /* Fall through, treat it like a text string. */
+
+	case 't':
+	  if (fp[1])
+	    goto extra_codes;
+	  fp++;
+
+	  elt = PyString_FromStringAndSize((const char *)dp->data,
+					   (int)dp->len);
+	  consumed = dp->len;
+	  break;
+
+	case 'd':
+	  fp++;
+	  /* Cycle through the labels.   If we fall out of this loop and dp[0]
+	   * isn't zero, the data is bad.
+	   */
+	  data_string fqdnbuf;
+	  memset(&fqdnbuf, 0, sizeof fqdnbuf);
+	  fqdnbuf.buffer = buffer_allocate(200);
+	  fqdnbuf.data = fqdnbuf.buffer->data;
+
+	  /* Current pointer into DNS data. */
+	  i = 0;
+
+	  /* Cycle through the DNS data until we run out of labels or data. */
+	  while (dp->data[i] && i < dp->len)
+	    {
+	      /* Get the label length or pointer. */
+	      unsigned l = dp->data[i];
+
+	      if (l < 0 || l > 63)
+		{
+		  log_error("unsupported DNS label length: %d", l);
+		  /* XXX raise exception */
+		  goto out;
+		}
+
+	      /* Normal label. */
+	      else if (l < 64)
+		{
+		  if (i + l > dp->len)
+		    {
+		      log_error("malformed DNS option data at %d: %s", i,
+				print_hex_1(dp->len, dp->data, 60));
+		      /* XXX raise exception */
+		      goto out;
+		    }
+		  while (l)
+		    {
+		      ++i;
+		      data_string_putc(&fqdnbuf, dp->data[i]);
+		      --l;
+		    }
+		  data_string_putc(&fqdnbuf, '.');
+		  i++;
+		}
+	    }
+
+	  /* If this was a fully-qualified domain name, walk over the terminal
+	   * label.
+	   */
+	  if (i < dp->len)
+	    ++i;
+
+	  consumed = i;
+	  elt = PyString_FromStringAndSize((const char *)fqdnbuf.data,
+					   (int)fqdnbuf.len);
+	  data_string_forget(&fqdnbuf);
+	  break;
+
+	  /* No data associated with this format. */
+	case 'o':
+	  fp++;
+	  if (fp[1])
+	    {
+	    extra_codes:
+	      log_error("%s: extra codes in format: %s", name, fmt);
+	      /* XXX throw exception */
+	      goto out;
+	    }	      
+	  elt = NULL;
+	  break;
+
+	case 'I':
+	  fp++;
+	  consumed = 4;
+	  if (dp->len < consumed)
+	    {
+	    twolittl:
+	      log_error("%s: short option data, format %c: %s",
+			name, *fp, (dp->len
+				    ? "<none>"
+				    : print_hex_1(dp->len, dp->data, 60)));
+	      /* XXX throw exception */
+	      goto out;
+	    }
+	  foo.s_addr = htonl(getULong(dp->data));
+	  elt = PyString_FromString(inet_ntoa(foo));
+	  break;
+
+	case '6':
+	  fp++;
+	  consumed = 16;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  char v6addr[46];
+	  inet_ntop(AF_INET6, (const char *)dp->data, v6addr, sizeof v6addr);
+	  elt = PyString_FromString(v6addr);
+	  break;
+
+	case 'l':
+	  fp++;
+	  consumed = 4;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  elt = PyLong_FromLong((long)getLong(dp->data));
+	  break;
+
+	case 'T':
+	  fp++;
+	  consumed = 4;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  tval = getULong(dp->data);
+	  if (tval == UINT_MAX)
+	    {
+	      elt = PyString_FromString("infinite");
+	      break;
+	    }
+	  /* fall through */
+
+	case 'L':
+	  fp++;
+	  consumed = 4;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  elt = PyLong_FromUnsignedLong(getULong(dp->data));
+	  break;
+
+	case 's':
+	  fp++;
+	  consumed = 2;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  elt = PyLong_FromLong((long)getShort(dp->data));
+	  break;
+
+	case 'S':
+	  fp++;
+	  consumed = 2;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  elt = PyLong_FromLong((long)getUShort(dp->data));
+	  break;
+
+	case 'b':
+	  fp++;
+	  consumed = 1;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  elt = PyLong_FromLong((long)*((const char *)dp->data));
+	  break;
+
+	case 'x':
+	case 'B':
+	  fp++;
+	  consumed = 1;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  elt = PyLong_FromLong((long)dp->data[0]);
+	  break;
+
+	case 'f':
+	  fp++;
+	  consumed = 1;
+	  if (dp->len < consumed)
+	    goto twolittl;
+	  if (dp->data[0])
+	    elt = Py_True;
+	  else
+	    elt = Py_False;
+	  Py_INCREF(elt);
+	  break;
+
+	default:
+	  log_error ("%s: garbage in format string: %s", name, fp);
+	  /* Throw an exception! */
+	  return 0;
+    }
+}
+
 /* Convert a python object into a wire-format option, using the option
  * format string.
  */
@@ -510,7 +749,6 @@ static struct option_cache *
 option_from_python(struct option *option, PyObject *data)
 {
   unsigned l;
-  struct data_string dp = *data;
   PyObject *ret;
   char buf[256];
   const char *errstring;
@@ -671,7 +909,6 @@ option_from_python(struct option *option, PyObject *data)
     }
   return oc;
 }
-#endif
 
 /* Local Variables:  */
 /* mode:C++ */
